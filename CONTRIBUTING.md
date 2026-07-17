@@ -27,7 +27,8 @@ deno task build:action
 
 To generate a digest locally, set `LLM_API_KEY`, `LLM_API_BASE_URL`, and
 `LLM_MODEL`. Set `LLM_BATCH_SIZE` to override the default of five articles per
-request, then run:
+request. Set `MAX_ARTICLES` or `MAX_ARTICLES_PER_FEED` to override the defaults
+of 20 articles overall and 10 per feed, then run:
 
 ```sh
 deno task digest
