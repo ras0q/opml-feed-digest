@@ -25,6 +25,7 @@ type Article = {
 };
 
 type ErrorRecord = { source: string; message: string };
+type ContentSource = "feed" | "article page";
 
 export async function opmlToMarkdown(
   opml: string,
@@ -41,17 +42,20 @@ export async function opmlToMarkdown(
   const started = Date.now();
   const errors: ErrorRecord[] = [];
 
-  console.error("News digest started");
+  console.error(
+    `News digest started: max articles=${config.maxArticles}, per feed=${config.maxArticlesPerFeed}, feed content threshold=${config.minFeedContentChars} chars`,
+  );
   const feeds = parseOpml(opml);
   const state = await loadState(config.statePath);
   console.error(
-    `Found ${feeds.length} feeds; restored ${state.entries.length} state entries`,
+    `Loaded ${feeds.length} feeds; restored ${state.entries.length} state entries`,
   );
 
   const articles: Article[] = [];
   let feedFailures = 0;
   for (const feed of feeds) {
     try {
+      console.error(`Fetching feed: ${feed.name}`);
       const xml = await retry(() =>
         fetchText(d.fetch, feed.url, config.httpTimeoutMs)
       );
@@ -59,6 +63,7 @@ export async function opmlToMarkdown(
         0,
         config.maxArticlesPerFeed,
       );
+      let skipped = 0;
       for (const item of parsed) {
         const id = await articleId(
           item.guid,
@@ -67,7 +72,10 @@ export async function opmlToMarkdown(
           item.title,
           item.published,
         );
-        if (state.entries.some((entry) => entry.id === id)) continue;
+        if (state.entries.some((entry) => entry.id === id)) {
+          skipped++;
+          continue;
+        }
         articles.push({
           ...item,
           id,
@@ -76,34 +84,63 @@ export async function opmlToMarkdown(
           category: feed.category,
         });
       }
+      console.error(
+        `Feed parsed: ${feed.name}; items=${parsed.length}, new=${
+          parsed.length - skipped
+        }, processed=${skipped}`,
+      );
     } catch (error) {
       feedFailures++;
-      errors.push({ source: feed.name, message: safeMessage(error) });
-      console.error(`Feed failed: ${feed.name}`);
+      const message = safeMessage(error);
+      errors.push({ source: feed.name, message });
+      console.error(`Feed failed: ${feed.name}; ${message}`);
     }
   }
 
   const selected = articles.slice(0, config.maxArticles);
-  console.error(`Found ${selected.length} new articles`);
-  if (selected.length === 0) return "";
+  console.error(
+    `Article selection: candidates=${articles.length}, selected=${selected.length}, limit=${config.maxArticles}`,
+  );
+  if (selected.length === 0) {
+    console.error("No new articles; digest generation skipped");
+    return "";
+  }
 
   const ready: Article[] = [];
-  for (const article of selected) {
+  for (const [index, article] of selected.entries()) {
     try {
-      const content = await articleContent(article, config, d.fetch);
+      console.error(
+        `Extracting article ${
+          index + 1
+        }/${selected.length}: ${article.feedName}; ${article.title}`,
+      );
+      const { content, source } = await articleContent(
+        article,
+        config,
+        d.fetch,
+      );
       if (!content) throw new Error("Article content is unavailable");
       article.content = content;
       ready.push(article);
+      console.error(
+        `Article ready: ${article.title}; source=${source}, chars=${content.length}`,
+      );
     } catch (error) {
-      errors.push({ source: article.title, message: safeMessage(error) });
-      console.error(`Article failed: ${article.title}`);
+      const message = safeMessage(error);
+      errors.push({ source: article.title, message });
+      console.error(`Article failed: ${article.title}; ${message}`);
     }
   }
 
   const completed: Article[] = [];
   for (let index = 0; index < ready.length; index += config.llmBatchSize) {
     const batch = ready.slice(index, index + config.llmBatchSize);
+    const batchNumber = index / config.llmBatchSize + 1;
+    const batchCount = Math.ceil(ready.length / config.llmBatchSize);
     try {
+      console.error(
+        `Summarizing batch ${batchNumber}/${batchCount}: articles=${batch.length}`,
+      );
       const summaries = await d.summarizeBatch(batch, config, d.fetch);
       for (const article of batch) {
         const summary = summaries.get(article.id);
@@ -111,13 +148,18 @@ export async function opmlToMarkdown(
         article.summary = summary;
         completed.push(article);
       }
+      console.error(`Summary batch complete: ${batchNumber}/${batchCount}`);
     } catch (error) {
       if (
         error instanceof Error && error.message === "LLM authentication failed"
       ) throw error;
+      const message = safeMessage(error);
+      console.error(
+        `Summary batch failed: ${batchNumber}/${batchCount}; ${message}`,
+      );
       for (const article of batch) {
-        errors.push({ source: article.title, message: safeMessage(error) });
-        console.error(`Article failed: ${article.title}`);
+        errors.push({ source: article.title, message });
+        console.error(`Article failed: ${article.title}; ${message}`);
       }
     }
   }
@@ -128,15 +170,26 @@ export async function opmlToMarkdown(
     remember(state, article.id, article.feedUrl, article.url, d.now());
   }
   if (d.persistState) {
-    await saveState(config.statePath, trimState(state, config));
+    const entriesBeforeTrim = state.entries.length;
+    const trimmed = trimState(state, config);
+    console.error(
+      `Saving state: entries=${trimmed.entries.length}, removed=${
+        entriesBeforeTrim - trimmed.entries.length
+      }`,
+    );
+    await saveState(config.statePath, trimmed);
+  } else {
+    console.error("State persistence skipped");
   }
 
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: config.timeZone })
     .format(d.now());
   console.error(
-    `Digest generated: ${completed.length} summaries; ${feedFailures} feed failures; ${
-      Date.now() - started
-    }ms`,
+    `Digest generated: summaries=${completed.length}, article failures=${
+      selected.length - ready.length
+    }, summary failures=${
+      ready.length - completed.length
+    }, feed failures=${feedFailures}, duration=${Date.now() - started}ms`,
   );
   return markdown(completed, date, errors);
 }
@@ -163,20 +216,26 @@ async function articleContent(
   article: Article,
   config: Config,
   fetcher: typeof fetch,
-): Promise<string> {
+): Promise<{ content: string; source: ContentSource }> {
   if (article.content.trim().length >= config.minFeedContentChars) {
     const content = article.content.trim();
-    return limit(
-      content.includes("<") ? textFromHtml(content) : content,
-      config.maxInputChars,
-    );
+    return {
+      content: limit(
+        content.includes("<") ? textFromHtml(content) : content,
+        config.maxInputChars,
+      ),
+      source: "feed",
+    };
   }
-  if (!article.url) return "";
+  if (!article.url) return { content: "", source: "article page" };
   const response = await retry(() =>
     fetchExternal(fetcher, article.url, config.httpTimeoutMs)
   );
   if (!response.ok) throw new Error(`Article returned HTTP ${response.status}`);
-  return limit(textFromHtml(await response.text()), config.maxInputChars);
+  return {
+    content: limit(textFromHtml(await response.text()), config.maxInputChars),
+    source: "article page",
+  };
 }
 
 export function safeMessage(error: unknown): string {

@@ -14,6 +14,9 @@ try {
   }
 
   const config = loadConfig({ requireLlm: !noLlm });
+  if (noLlm) {
+    console.error("LLM API is disabled; state persistence is disabled");
+  }
   const opml = await readFile(config.opmlPath, "utf8");
   const digest = await opmlToMarkdown(
     opml,
