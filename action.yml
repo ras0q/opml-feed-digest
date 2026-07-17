@@ -1,0 +1,40 @@
+name: OPML Feed Digest
+description: Generate a Markdown feed digest and persist processed-article state after job success.
+
+inputs:
+  opml-path:
+    description: Path to the OPML file, relative to the calling repository root.
+    required: true
+  state-path:
+    description: Path to the processed-article state file, relative to the calling repository root.
+    default: .state/processed.json
+    required: false
+  output-path:
+    description: Path for the generated Markdown file, relative to the calling repository root.
+    default: digest.md
+    required: false
+  cache-key-prefix:
+    description: Prefix for the processed-article cache key.
+    default: opml-feed-digest-v1-
+    required: false
+  llm-api-key:
+    description: API key for the OpenAI-compatible LLM API.
+    required: true
+  llm-api-base-url:
+    description: Base URL for the OpenAI-compatible LLM API.
+    default: https://api.x.ai/v1
+    required: false
+  llm-model:
+    description: Model name for the OpenAI-compatible LLM API.
+    default: grok-3-mini
+    required: false
+
+outputs:
+  has-new-articles:
+    description: Whether the generated Markdown file contains at least one article.
+
+runs:
+  using: node24
+  main: dist/main.mjs
+  post: dist/post.mjs
+  post-if: success()

@@ -1,0 +1,22 @@
+{
+  "imports": {
+    "@actions/cache": "npm:@actions/cache@4.0.3",
+    "@actions/core": "npm:@actions/core@1.11.1",
+    "@std/assert": "jsr:@std/assert@1",
+    "@mozilla/readability": "npm:@mozilla/readability@0.6.0",
+    "fast-xml-parser": "npm:fast-xml-parser@5.10.0",
+    "linkedom": "npm:linkedom@0.18.13"
+  },
+  "tasks": {
+    "build:action": "deno bundle --minify action-src/main.ts -o dist/main.mjs && deno bundle --minify action-src/post.ts -o dist/post.mjs",
+    "fix": "deno fmt && deno lint && deno check",
+    "digest": "deno run -R=./feeds.opml,./.state/ -W=./.state/ -NE cli.ts",
+    "test": "deno test -RWNE"
+  },
+  "fmt": {
+    "exclude": ["dist/"]
+  },
+  "lint": {
+    "exclude": ["dist/"]
+  }
+}
