@@ -164,7 +164,7 @@ async function articleContent(
   config: Config,
   fetcher: typeof fetch,
 ): Promise<string> {
-  if (article.content.trim().length >= 200) {
+  if (article.content.trim().length >= config.minFeedContentChars) {
     const content = article.content.trim();
     return limit(
       content.includes("<") ? textFromHtml(content) : content,

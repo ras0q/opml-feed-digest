@@ -263,6 +263,7 @@ Deno.test("the run completes with partial article failures", async () => {
   const directory = await Deno.makeTempDir();
   const config = testConfig(directory);
   config.llmBatchSize = 1;
+  config.minFeedContentChars = 200;
 
   const feed =
     `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><description>${
@@ -370,6 +371,45 @@ Deno.test("a non-persistent run does not mark articles as processed", async () =
   await assertRejects(() => Deno.stat(config.statePath));
 });
 
+Deno.test("short feed excerpts are replaced with the article page", async () => {
+  const directory = await Deno.makeTempDir();
+  const config = testConfig(directory);
+  const excerpt = "excerpt ".repeat(100);
+  const feed =
+    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/article</link><description>${excerpt}</description></item></channel></rss>`;
+  let requests = 0;
+
+  await opmlToMarkdown(
+    `<opml><body><outline title="Blog" xmlUrl="https://e.test/feed"/></body></opml>`,
+    config,
+    {
+      fetch: () => {
+        requests++;
+        return Promise.resolve(
+          new Response(
+            requests === 1 ? feed : "<article>Full article body</article>",
+          ),
+        );
+      },
+      persistState: false,
+      summarizeBatch: (articles) => {
+        assertEquals(articles[0].content, "Full article body");
+        return Promise.resolve(
+          new Map(articles.map((article) => [article.id, {
+            priority: "low" as const,
+            headline: "確認用",
+            relevance: "URL の本文を使う",
+            tags: [],
+            points: [],
+          }])),
+        );
+      },
+    },
+  );
+
+  assertEquals(requests, 2);
+});
+
 function testConfig(directory: string): Config {
   return {
     opmlPath: `${directory}/feeds.opml`,
@@ -378,6 +418,7 @@ function testConfig(directory: string): Config {
     maxArticles: 10,
     maxArticlesPerFeed: 5,
     maxInputChars: 1_000,
+    minFeedContentChars: 1_000,
     httpTimeoutMs: 1_000,
     llmTimeoutMs: 1_000,
     llmMaxOutputTokens: 100,

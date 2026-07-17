@@ -5,6 +5,7 @@ export type Config = {
   maxArticles: number;
   maxArticlesPerFeed: number;
   maxInputChars: number;
+  minFeedContentChars: number;
   httpTimeoutMs: number;
   llmTimeoutMs: number;
   llmMaxOutputTokens: number;
@@ -51,6 +52,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     maxArticles: number("MAX_ARTICLES", 20),
     maxArticlesPerFeed: number("MAX_ARTICLES_PER_FEED", 3),
     maxInputChars: number("MAX_INPUT_CHARS", 12_000),
+    minFeedContentChars: number("MIN_FEED_CONTENT_CHARS", 1_000),
     httpTimeoutMs: number("HTTP_TIMEOUT_MS", 15_000),
     llmTimeoutMs: number("LLM_TIMEOUT_MS", 30_000),
     llmMaxOutputTokens: number("LLM_MAX_OUTPUT_TOKENS", 700),
