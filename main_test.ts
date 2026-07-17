@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { opmlToMarkdown } from "./main.ts";
 import type { Config } from "./src/config.ts";
 import { markdown } from "./src/markdown.ts";
@@ -66,6 +66,17 @@ Deno.test("state persists and retention trims old entries", async () => {
     ).entries.map((entry) => entry.id),
     ["new"],
   );
+});
+
+Deno.test("state rejects malformed cache data", async () => {
+  const directory = await Deno.makeTempDir();
+  const path = `${directory}/state.json`;
+  await Deno.writeTextFile(
+    path,
+    JSON.stringify({ schemaVersion: 1, entries: [{ id: 1 }] }),
+  );
+
+  await assertRejects(() => loadState(path));
 });
 
 Deno.test("LLM summaries require the decision schema", () => {
@@ -157,13 +168,25 @@ Deno.test("LLM batches use a strict response schema", async () => {
     json_schema: {
       strict: boolean;
       schema: {
+        additionalProperties: boolean;
         properties: {
-          summaries: { items: { properties: { id: { enum: string[] } } } };
+          summaries: {
+            items: {
+              additionalProperties: boolean;
+              properties: { id: { enum: string[] } };
+            };
+          };
         };
       };
     };
   };
   assertEquals(responseFormat.json_schema.strict, true);
+  assertEquals(responseFormat.json_schema.schema.additionalProperties, false);
+  assertEquals(
+    responseFormat.json_schema.schema.properties.summaries.items
+      .additionalProperties,
+    false,
+  );
   assertEquals(
     responseFormat.json_schema.schema.properties.summaries.items.properties.id
       .enum,

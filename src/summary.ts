@@ -1,31 +1,27 @@
 import { type } from "arktype";
 import type { Config } from "./config.ts";
 
-export type Summary = {
-  priority: "high" | "medium" | "low";
-  headline: string;
-  relevance: string;
-  tags: string[];
-  points: string[];
-};
-
 export type SummaryArticle = {
   id: string;
   title: string;
   content: string;
 };
 
-const summaryDefinition = {
+const Summary = type({
   priority: '"high" | "medium" | "low"',
   headline: "string",
   relevance: "string",
-  tags: "string[]",
-  points: "string[]",
-} as const;
+  tags: type("string[]").atLeastLength(1).atMostLength(3),
+  points: type("string[]").atLeastLength(1).atMostLength(3),
+});
+export type Summary = typeof Summary.infer;
 
-const summaryType = type(summaryDefinition);
-const summariesType = type({
-  summaries: type({ id: "string", ...summaryDefinition }).array(),
+const Summaries = type({
+  summaries: Summary.and({ id: "string" }).array(),
+});
+
+const Completion = type({
+  choices: type({ message: { content: "string" } }).array(),
 });
 
 export async function summarizeBatch(
@@ -90,11 +86,9 @@ export async function summarizeBatch(
       ) throw new LlmRequestError(`LLM returned HTTP ${response.status}`);
       if (!response.ok) throw new Error(`LLM returned HTTP ${response.status}`);
 
-      const data = await response.json() as {
-        choices?: Array<{ message?: { content?: unknown } }>;
-      };
-      const content = data.choices?.[0]?.message?.content;
-      if (typeof content !== "string") throw new Error("Invalid LLM response");
+      const data = Completion.assert(await response.json());
+      const content = data.choices[0]?.message.content;
+      if (!content) throw new Error("Invalid LLM response");
       return validateSummaries(
         JSON.parse(content),
         articles.map((article) => article.id),
@@ -117,61 +111,18 @@ export async function summarizeBatch(
 class LlmAuthenticationError extends Error {}
 class LlmRequestError extends Error {}
 
-function responseSchema(ids: string[]): Record<string, unknown> {
-  return {
-    type: "object",
-    additionalProperties: false,
-    required: ["summaries"],
-    properties: {
-      summaries: {
-        type: "array",
-        minItems: ids.length,
-        maxItems: ids.length,
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: [
-            "id",
-            "priority",
-            "headline",
-            "relevance",
-            "tags",
-            "points",
-          ],
-          properties: {
-            id: { type: "string", enum: ids },
-            priority: { type: "string", enum: ["high", "medium", "low"] },
-            headline: { type: "string" },
-            relevance: { type: "string" },
-            tags: {
-              type: "array",
-              minItems: 1,
-              maxItems: 3,
-              items: { type: "string" },
-            },
-            points: {
-              type: "array",
-              minItems: 1,
-              maxItems: 3,
-              items: { type: "string" },
-            },
-          },
-        },
-      },
-    },
-  };
+function responseSchema(ids: string[]) {
+  return type({
+    summaries: Summary.and({ id: type.enumerated(...ids) }).array()
+      .exactlyLength(ids.length),
+  }).onDeepUndeclaredKey("reject").toJsonSchema();
 }
 
 export function validateSummaries(
   value: unknown,
   ids: readonly string[],
 ): Map<string, Summary> {
-  let response: typeof summariesType.infer;
-  try {
-    response = summariesType.assert(value);
-  } catch {
-    throw new Error("Invalid LLM response");
-  }
+  const response = Summaries.assert(value);
   if (response.summaries.length !== ids.length) {
     throw new Error("Invalid LLM response");
   }
@@ -194,19 +145,13 @@ export function validateSummaries(
 }
 
 export function validateSummary(value: unknown): Summary {
-  let summary: typeof summaryType.infer;
-  try {
-    summary = summaryType.assert(value);
-  } catch {
-    throw new Error("Invalid LLM response");
-  }
+  const summary = Summary.assert(value);
   if (
     !summary.headline.trim() || !summary.relevance.trim() ||
-    summary.tags.length < 1 || summary.tags.length > 3 ||
-    summary.points.length < 1 || summary.points.length > 3 ||
     summary.tags.some((tag) => !tag.trim()) ||
     summary.points.some((point) => !point.trim())
   ) throw new Error("Invalid LLM response");
+
   return {
     ...summary,
     headline: summary.headline.trim(),

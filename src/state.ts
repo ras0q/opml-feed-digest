@@ -1,22 +1,25 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import nodePath from "node:path";
+import { type } from "arktype";
 import type { Config } from "./config.ts";
 
-export type State = { schemaVersion: 1; entries: StateEntry[] };
-export type StateEntry = {
-  id: string;
-  feedUrl: string;
-  articleUrl: string;
-  processedAt: string;
-};
+const StateEntry = type({
+  id: "string",
+  feedUrl: "string",
+  articleUrl: "string",
+  processedAt: "string",
+}).array();
+export type StateEntry = typeof StateEntry.infer;
+
+const State = type({
+  schemaVersion: "1",
+  entries: StateEntry,
+});
+export type State = typeof State.infer;
 
 export async function loadState(path: string): Promise<State> {
   try {
-    const state = JSON.parse(await readFile(path, "utf8"));
-    if (state.schemaVersion !== 1 || !Array.isArray(state.entries)) {
-      throw new Error("Unsupported state schema");
-    }
-    return state;
+    return State.assert(JSON.parse(await readFile(path, "utf8")));
   } catch (error) {
     if (
       typeof error === "object" && error !== null && "code" in error &&
