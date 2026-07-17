@@ -89,13 +89,26 @@ export function normalizeUrl(raw: string): string {
 export function textFromHtml(value: string): string {
   const source = value.includes("<") ? value : `<body>${value}</body>`;
   const document = new DOMParser().parseFromString(source, "text/html");
-  if (!document) return "";
+  const fallback = () =>
+    normalizeText(
+      document?.body?.textContent || document?.textContent || stripHtml(value),
+    );
+  if (!document) return fallback();
 
-  const article = new Readability(document).parse();
-  const text = article?.textContent ?? document.body?.textContent ??
-    document.textContent ?? "";
+  try {
+    const article = new Readability(document).parse();
+    return normalizeText(article?.textContent) || fallback();
+  } catch {
+    return fallback();
+  }
+}
 
-  return text.replace(/\s+/g, " ").trim();
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]*>/g, " ");
 }
 
 export const limit = (value: string, length: number) => value.slice(0, length);

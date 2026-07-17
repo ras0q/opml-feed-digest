@@ -9,7 +9,7 @@ import {
   validateSummaries,
   validateSummary,
 } from "./src/summary.ts";
-import { articleId, normalizeUrl } from "./src/util.ts";
+import { articleId, normalizeUrl, textFromHtml } from "./src/util.ts";
 
 Deno.test("OPML hierarchy and feed URLs are parsed", () => {
   const feeds = parseOpml(
@@ -62,6 +62,13 @@ Deno.test("URLs normalize and identifiers remain stable", async () => {
   assertEquals(
     await articleId(undefined, "https://example.com/a", "f", "t"),
     await articleId(undefined, "https://example.com/a", "f", "t"),
+  );
+});
+
+Deno.test("HTML text extraction falls back when article parsing has no result", () => {
+  assertEquals(
+    textFromHtml("<div>Fallback <strong>article</strong> text</div>"),
+    "Fallback article text",
   );
 });
 
