@@ -55,7 +55,7 @@ export function parseFeed(xml: string, feedUrl: string): FeedItem[] {
 
   const rss = object(document.rss);
   const channel = rss && object(rss.channel);
-  const rdf = object(document.RDF);
+  const rdf = object(document.RDF) ?? namespaceElement(document, "RDF");
   const items = channel?.item ?? rdf?.item;
   if (!items) throw new Error(`Unsupported or empty feed: ${feedUrl}`);
   return objects(items).map(rssItem);
@@ -63,7 +63,7 @@ export function parseFeed(xml: string, feedUrl: string): FeedItem[] {
 
 function rssItem(item: Xml): FeedItem {
   return {
-    guid: string(item.guid) || undefined,
+    guid: string(item.guid) || string(item["dc:identifier"]) || undefined,
     title: string(item.title) || "Untitled article",
     url: string(item.link),
     published: string(item.pubDate) || string(item["dc:date"]) ||
@@ -75,7 +75,7 @@ function rssItem(item: Xml): FeedItem {
 function atomItem(entry: Xml): FeedItem {
   const link =
     array(entry.link).map(object).find((item) =>
-      item && string(item.rel) !== "alternate"
+      item && ["", "alternate"].includes(string(item.rel))
     ) ?? object(entry.link);
   return {
     guid: string(entry.id) || undefined,
@@ -101,6 +101,13 @@ function objects(value: unknown): Xml[] {
   return array(value).map(object).filter((item): item is Xml =>
     item !== undefined
   );
+}
+
+function namespaceElement(document: Xml, localName: string): Xml | undefined {
+  const element = Object.entries(document).find(([name]) =>
+    name === localName || name.endsWith(`:${localName}`)
+  );
+  return element ? object(element[1]) : undefined;
 }
 
 function hostname(url: string): string {

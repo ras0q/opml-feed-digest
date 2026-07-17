@@ -39,6 +39,21 @@ Deno.test("RSS and Atom are parsed", () => {
   );
 });
 
+Deno.test("RSS 1.0 and Atom alternate links are parsed", () => {
+  const rdf = parseFeed(
+    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><item><title>RSS 1.0</title><link>https://e.test/rss-1</link><dc:identifier>rss-1</dc:identifier></item></rdf:RDF>`,
+    "https://e.test/rss-1.xml",
+  )[0];
+  assertEquals(rdf.guid, "rss-1");
+  assertEquals(rdf.url, "https://e.test/rss-1");
+
+  const atom = parseFeed(
+    `<feed><entry><id>atom</id><title>Atom</title><link rel="self" href="https://e.test/feed"/><link rel="alternate" href="https://e.test/article"/></entry></feed>`,
+    "https://e.test/feed",
+  )[0];
+  assertEquals(atom.url, "https://e.test/article");
+});
+
 Deno.test("URLs normalize and identifiers remain stable", async () => {
   assertEquals(
     normalizeUrl("https://EXAMPLE.com/a/?utm_source=x#top"),
