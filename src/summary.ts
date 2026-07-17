@@ -83,8 +83,16 @@ export async function summarizeBatch(
       if (
         response.status >= 400 && response.status < 500 &&
         response.status !== 429
-      ) throw new LlmRequestError(`LLM returned HTTP ${response.status}`);
-      if (!response.ok) throw new Error(`LLM returned HTTP ${response.status}`);
+      ) {
+        throw new LlmRequestError(
+          `LLM returned HTTP ${response.status}: ${response.statusText}`,
+        );
+      }
+      if (!response.ok) {
+        throw new Error(
+          `LLM returned HTTP ${response.status}: ${response.statusText}`,
+        );
+      }
 
       const data = Completion.assert(await response.json());
       const content = data.choices[0]?.message.content;
