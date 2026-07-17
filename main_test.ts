@@ -332,6 +332,37 @@ Deno.test("the run creates no Issue when every article is already processed", as
   assertEquals(result, "");
 });
 
+Deno.test("a non-persistent run does not mark articles as processed", async () => {
+  const directory = await Deno.makeTempDir();
+  const config = testConfig(directory);
+  const feed =
+    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><description>${
+      "a".repeat(220)
+    }</description></item></channel></rss>`;
+
+  const result = await opmlToMarkdown(
+    `<opml><body><outline title="Blog" xmlUrl="https://e.test/feed"/></body></opml>`,
+    config,
+    {
+      fetch: () => Promise.resolve(new Response(feed)),
+      persistState: false,
+      summarizeBatch: (articles) =>
+        Promise.resolve(
+          new Map(articles.map((article) => [article.id, {
+            priority: "low" as const,
+            headline: "確認用",
+            relevance: "LLM を呼び出さない実行",
+            tags: ["no-llm"],
+            points: ["本文を取得した"],
+          }])),
+        ),
+    },
+  );
+
+  assertEquals(result.includes("確認用"), true);
+  await assertRejects(() => Deno.stat(config.statePath));
+});
+
 function testConfig(directory: string): Config {
   return {
     opmlPath: `${directory}/feeds.opml`,

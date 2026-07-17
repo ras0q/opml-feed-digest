@@ -35,6 +35,7 @@ export async function opmlToMarkdown(
     fetch: fetch,
     summarizeBatch,
     now: () => new Date(),
+    persistState: true,
     ...deps,
   };
   const started = Date.now();
@@ -126,7 +127,9 @@ export async function opmlToMarkdown(
   for (const article of completed) {
     remember(state, article.id, article.feedUrl, article.url, d.now());
   }
-  await saveState(config.statePath, trimState(state, config));
+  if (d.persistState) {
+    await saveState(config.statePath, trimState(state, config));
+  }
 
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: config.timeZone })
     .format(d.now());
@@ -142,6 +145,7 @@ type Dependencies = {
   fetch: typeof fetch;
   summarizeBatch: typeof summarizeBatch;
   now: () => Date;
+  persistState: boolean;
 };
 
 async function fetchText(

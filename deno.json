@@ -12,6 +12,7 @@
     "build:action": "deno bundle --minify action-src/main.ts -o dist/main.mjs && deno bundle --minify action-src/post.ts -o dist/post.mjs",
     "fix": "deno fmt && deno lint && deno check cli.ts main.ts main_test.ts action-src/main.ts action-src/paths.ts action-src/paths.test.ts action-src/post.ts",
     "digest": "deno run -R=./feeds.opml,./.state/ -W=./.state/ -NE cli.ts",
+    "digest:dev": "deno task digest --no-llm",
     "test": "deno test -RWNE"
   },
   "fmt": {
