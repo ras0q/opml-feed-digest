@@ -43,7 +43,7 @@ export async function opmlToMarkdown(
   const errors: ErrorRecord[] = [];
 
   console.error(
-    `News digest started: max articles=${config.maxArticles}, per feed=${config.maxArticlesPerFeed}, feed content threshold=${config.minFeedContentChars} chars`,
+    `News digest started: max articles=${config.maxArticles}, per feed=${config.maxArticlesPerFeed}, max age=${config.maxArticleAgeDays} days, feed content threshold=${config.minFeedContentChars} chars`,
   );
   const feeds = parseOpml(opml);
   const state = await loadState(config.statePath);
@@ -53,6 +53,8 @@ export async function opmlToMarkdown(
 
   const articles: Article[] = [];
   let feedFailures = 0;
+  const oldestPublishedAt = d.now().getTime() -
+    config.maxArticleAgeDays * 86_400_000;
   for (const feed of feeds) {
     try {
       console.error(`Fetching feed: ${feed.name}`);
@@ -64,7 +66,12 @@ export async function opmlToMarkdown(
         config.maxArticlesPerFeed,
       );
       let skipped = 0;
+      let stale = 0;
       for (const item of parsed) {
+        if (!isRecent(item.published, oldestPublishedAt)) {
+          stale++;
+          continue;
+        }
         const id = await articleId(
           item.guid,
           item.url,
@@ -86,8 +93,8 @@ export async function opmlToMarkdown(
       }
       console.error(
         `Feed parsed: ${feed.name}; items=${parsed.length}, new=${
-          parsed.length - skipped
-        }, processed=${skipped}`,
+          parsed.length - skipped - stale
+        }, processed=${skipped}, stale-or-undated=${stale}`,
       );
     } catch (error) {
       feedFailures++;
@@ -242,4 +249,13 @@ export function safeMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : "Unknown error";
   return message.replace(/(?:sk-|Bearer\s+)[A-Za-z0-9_\-.]+/g, "[redacted]")
     .slice(0, 160);
+}
+
+function isRecent(
+  published: string | undefined,
+  oldestPublishedAt: number,
+): boolean {
+  if (!published) return false;
+  const timestamp = Date.parse(published);
+  return Number.isFinite(timestamp) && timestamp >= oldestPublishedAt;
 }

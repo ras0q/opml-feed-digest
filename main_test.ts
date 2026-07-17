@@ -264,11 +264,12 @@ Deno.test("the run completes with partial article failures", async () => {
   const config = testConfig(directory);
   config.llmBatchSize = 1;
   config.minFeedContentChars = 200;
+  const published = new Date().toUTCString();
 
   const feed =
-    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><description>${
+    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><pubDate>${published}</pubDate><description>${
       "a".repeat(220)
-    }</description></item><item><guid>two</guid><title>Two</title><link>https://e.test/two</link><description>${
+    }</description></item><item><guid>two</guid><title>Two</title><link>https://e.test/two</link><pubDate>${published}</pubDate><description>${
       "b".repeat(220)
     }</description></item></channel></rss>`;
   await Deno.writeTextFile(
@@ -308,6 +309,7 @@ Deno.test("the run completes with partial article failures", async () => {
 Deno.test("the run creates no Issue when every article is already processed", async () => {
   const directory = await Deno.makeTempDir();
   const config = testConfig(directory);
+  const published = new Date().toUTCString();
 
   await Deno.writeTextFile(
     `${directory}/feeds.opml`,
@@ -319,6 +321,7 @@ Deno.test("the run creates no Issue when every article is already processed", as
     "https://e.test/one",
     "https://e.test/feed",
     "One",
+    published,
   );
   await saveState(config.statePath, {
     schemaVersion: 1,
@@ -331,7 +334,7 @@ Deno.test("the run creates no Issue when every article is already processed", as
   });
 
   const feed =
-    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><description>body</description></item></channel></rss>`;
+    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><pubDate>${published}</pubDate><description>body</description></item></channel></rss>`;
   const result = await opmlToMarkdown(
     await Deno.readTextFile(config.opmlPath),
     config,
@@ -343,8 +346,9 @@ Deno.test("the run creates no Issue when every article is already processed", as
 Deno.test("a non-persistent run does not mark articles as processed", async () => {
   const directory = await Deno.makeTempDir();
   const config = testConfig(directory);
+  const published = new Date().toUTCString();
   const feed =
-    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><description>${
+    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><pubDate>${published}</pubDate><description>${
       "a".repeat(220)
     }</description></item></channel></rss>`;
 
@@ -375,8 +379,9 @@ Deno.test("short feed excerpts are replaced with the article page", async () => 
   const directory = await Deno.makeTempDir();
   const config = testConfig(directory);
   const excerpt = "excerpt ".repeat(100);
+  const published = new Date().toUTCString();
   const feed =
-    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/article</link><description>${excerpt}</description></item></channel></rss>`;
+    `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/article</link><pubDate>${published}</pubDate><description>${excerpt}</description></item></channel></rss>`;
   let requests = 0;
 
   await opmlToMarkdown(
@@ -410,6 +415,41 @@ Deno.test("short feed excerpts are replaced with the article page", async () => 
   assertEquals(requests, 2);
 });
 
+Deno.test("only recently published articles are selected", async () => {
+  const directory = await Deno.makeTempDir();
+  const config = testConfig(directory);
+  config.maxArticleAgeDays = 3;
+  const content = "a".repeat(1_000);
+  const feed =
+    `<rss><channel><item><guid>fresh</guid><title>Fresh</title><link>https://e.test/fresh</link><pubDate>2026-07-17T00:00:00Z</pubDate><description>${content}</description></item><item><guid>old</guid><title>Old</title><link>https://e.test/old</link><pubDate>2026-07-14T23:59:59Z</pubDate><description>${content}</description></item><item><guid>undated</guid><title>Undated</title><link>https://e.test/undated</link><description>${content}</description></item></channel></rss>`;
+
+  const result = await opmlToMarkdown(
+    `<opml><body><outline title="Blog" xmlUrl="https://e.test/feed"/></body></opml>`,
+    config,
+    {
+      fetch: () => Promise.resolve(new Response(feed)),
+      now: () => new Date("2026-07-18T00:00:00Z"),
+      persistState: false,
+      summarizeBatch: (articles) => {
+        assertEquals(articles.map((article) => article.title), ["Fresh"]);
+        return Promise.resolve(
+          new Map(articles.map((article) => [article.id, {
+            priority: "low" as const,
+            headline: "確認用",
+            relevance: "鮮度フィルターを通過",
+            tags: [],
+            points: [],
+          }])),
+        );
+      },
+    },
+  );
+
+  assertEquals(result.includes("Fresh"), true);
+  assertEquals(result.includes("Old"), false);
+  assertEquals(result.includes("Undated"), false);
+});
+
 function testConfig(directory: string): Config {
   return {
     opmlPath: `${directory}/feeds.opml`,
@@ -417,6 +457,7 @@ function testConfig(directory: string): Config {
     timeZone: "Asia/Tokyo",
     maxArticles: 10,
     maxArticlesPerFeed: 5,
+    maxArticleAgeDays: 36_500,
     maxInputChars: 1_000,
     minFeedContentChars: 1_000,
     httpTimeoutMs: 1_000,

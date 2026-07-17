@@ -4,6 +4,7 @@ export type Config = {
   timeZone: string;
   maxArticles: number;
   maxArticlesPerFeed: number;
+  maxArticleAgeDays: number;
   maxInputChars: number;
   minFeedContentChars: number;
   httpTimeoutMs: number;
@@ -51,6 +52,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
     timeZone: process.env.TIME_ZONE ?? "Asia/Tokyo",
     maxArticles: number("MAX_ARTICLES", 20),
     maxArticlesPerFeed: number("MAX_ARTICLES_PER_FEED", 3),
+    maxArticleAgeDays: number("MAX_ARTICLE_AGE_DAYS", 3),
     maxInputChars: number("MAX_INPUT_CHARS", 12_000),
     minFeedContentChars: number("MIN_FEED_CONTENT_CHARS", 1_000),
     httpTimeoutMs: number("HTTP_TIMEOUT_MS", 15_000),
