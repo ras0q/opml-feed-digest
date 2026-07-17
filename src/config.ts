@@ -8,6 +8,7 @@ export type Config = {
   httpTimeoutMs: number;
   llmTimeoutMs: number;
   llmMaxOutputTokens: number;
+  llmBatchSize: number;
   llmApiBaseUrl: string;
   llmApiKey: string;
   llmModel: string;
@@ -40,9 +41,10 @@ export function loadConfig(): Config {
     httpTimeoutMs: number("HTTP_TIMEOUT_MS", 15_000),
     llmTimeoutMs: number("LLM_TIMEOUT_MS", 30_000),
     llmMaxOutputTokens: number("LLM_MAX_OUTPUT_TOKENS", 700),
+    llmBatchSize: number("LLM_BATCH_SIZE", 5),
     llmApiBaseUrl: required("LLM_API_BASE_URL"),
     llmApiKey: required("LLM_API_KEY"),
-    llmModel: process.env.LLM_MODEL ?? "grok-3-mini",
+    llmModel: required("LLM_MODEL"),
     stateRetentionDays: number("STATE_RETENTION_DAYS", 90),
     stateMaxEntries: number("STATE_MAX_ENTRIES", 5_000),
   };

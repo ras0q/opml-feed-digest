@@ -4,7 +4,11 @@ import type { Config } from "./src/config.ts";
 import { markdown } from "./src/markdown.ts";
 import { parseFeed, parseOpml } from "./src/parsers.ts";
 import { loadState, remember, saveState, trimState } from "./src/state.ts";
-import { validateSummary } from "./src/summary.ts";
+import {
+  summarizeBatch,
+  validateSummaries,
+  validateSummary,
+} from "./src/summary.ts";
 import { articleId, normalizeUrl } from "./src/util.ts";
 
 Deno.test("OPML hierarchy and feed URLs are parsed", () => {
@@ -76,6 +80,96 @@ Deno.test("LLM summaries require the decision schema", () => {
     "high",
   );
   assertThrows(() => validateSummary({ priority: "urgent" }));
+  assertEquals(
+    validateSummaries({
+      summaries: [{
+        id: "one",
+        priority: "medium",
+        headline: "見出し",
+        relevance: "関連性",
+        tags: ["Deno"],
+        points: ["要点"],
+      }],
+    }, ["one"]).get("one")?.headline,
+    "見出し",
+  );
+  assertThrows(() =>
+    validateSummaries({
+      summaries: [{
+        id: "unexpected",
+        priority: "medium",
+        headline: "見出し",
+        relevance: "関連性",
+        tags: ["Deno"],
+        points: ["要点"],
+      }],
+    }, ["one"])
+  );
+});
+
+Deno.test("LLM batches use a strict response schema", async () => {
+  let request: Record<string, unknown> | undefined;
+  let requests = 0;
+  const summaries = await summarizeBatch(
+    [
+      { id: "one", title: "One", content: "first article" },
+      { id: "two", title: "Two", content: "second article" },
+    ],
+    testConfig("."),
+    (_input, init) => {
+      requests++;
+      request = JSON.parse(String(init?.body));
+      return Promise.resolve(
+        new Response(JSON.stringify({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                summaries: [
+                  {
+                    id: "one",
+                    priority: "high",
+                    headline: "一つ目",
+                    relevance: "関連性",
+                    tags: ["tag"],
+                    points: ["要点"],
+                  },
+                  {
+                    id: "two",
+                    priority: "low",
+                    headline: "二つ目",
+                    relevance: "関連性",
+                    tags: ["tag"],
+                    points: ["要点"],
+                  },
+                ],
+              }),
+            },
+          }],
+        })),
+      );
+    },
+  );
+
+  assertEquals(summaries.size, 2);
+  assertEquals(requests, 1);
+  if (!request) throw new Error("Expected an LLM request");
+  const responseFormat = request.response_format as {
+    json_schema: {
+      strict: boolean;
+      schema: {
+        properties: {
+          summaries: { items: { properties: { id: { enum: string[] } } } };
+        };
+      };
+    };
+  };
+  assertEquals(responseFormat.json_schema.strict, true);
+  assertEquals(
+    responseFormat.json_schema.schema.properties.summaries.items.properties.id
+      .enum,
+    ["one", "two"],
+  );
+  assertEquals(request.max_tokens, 200);
 });
 
 Deno.test("Markdown prioritizes categories and emits a compact digest", () => {
@@ -123,6 +217,7 @@ Deno.test("Markdown prioritizes categories and emits a compact digest", () => {
 Deno.test("the run completes with partial article failures", async () => {
   const directory = await Deno.makeTempDir();
   const config = testConfig(directory);
+  config.llmBatchSize = 1;
 
   const feed =
     `<rss><channel><item><guid>one</guid><title>One</title><link>https://e.test/one</link><description>${
@@ -140,15 +235,22 @@ Deno.test("the run completes with partial article failures", async () => {
     config,
     {
       fetch: () => Promise.resolve(new Response(feed)),
-      summarize: (content) => {
-        if (content.startsWith("a")) throw new Error("summary failed");
-        return Promise.resolve({
-          priority: "medium",
-          headline: "見出し",
-          relevance: "関連性",
-          tags: ["tag"],
-          points: ["要点"],
-        });
+      summarizeBatch: (articles) => {
+        if (articles.some((article) => article.content.startsWith("a"))) {
+          throw new Error("summary failed");
+        }
+        return Promise.resolve(
+          new Map(articles.map((article) => [
+            article.id,
+            {
+              priority: "medium" as const,
+              headline: "見出し",
+              relevance: "関連性",
+              tags: ["tag"],
+              points: ["要点"],
+            },
+          ])),
+        );
       },
     },
   );
@@ -203,6 +305,7 @@ function testConfig(directory: string): Config {
     httpTimeoutMs: 1_000,
     llmTimeoutMs: 1_000,
     llmMaxOutputTokens: 100,
+    llmBatchSize: 5,
     llmApiBaseUrl: "https://llm.test",
     llmApiKey: "secret",
     llmModel: "test",

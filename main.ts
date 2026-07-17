@@ -1,7 +1,7 @@
 import { type Config, loadConfig } from "./src/config.ts";
 import { markdown } from "./src/markdown.ts";
 import { parseFeed, parseOpml } from "./src/parsers.ts";
-import { summarize, type Summary } from "./src/summary.ts";
+import { summarizeBatch, type Summary } from "./src/summary.ts";
 import { loadState, remember, saveState, trimState } from "./src/state.ts";
 import {
   articleId,
@@ -33,7 +33,7 @@ export async function opmlToMarkdown(
 ): Promise<string> {
   const d: Dependencies = {
     fetch: fetch,
-    summarize,
+    summarizeBatch,
     now: () => new Date(),
     ...deps,
   };
@@ -86,19 +86,38 @@ export async function opmlToMarkdown(
   console.error(`Found ${selected.length} new articles`);
   if (selected.length === 0) return "";
 
-  const completed: Article[] = [];
+  const ready: Article[] = [];
   for (const article of selected) {
     try {
       const content = await articleContent(article, config, d.fetch);
       if (!content) throw new Error("Article content is unavailable");
-      article.summary = await d.summarize(content, config, d.fetch);
-      completed.push(article);
+      article.content = content;
+      ready.push(article);
+    } catch (error) {
+      errors.push({ source: article.title, message: safeMessage(error) });
+      console.error(`Article failed: ${article.title}`);
+    }
+  }
+
+  const completed: Article[] = [];
+  for (let index = 0; index < ready.length; index += config.llmBatchSize) {
+    const batch = ready.slice(index, index + config.llmBatchSize);
+    try {
+      const summaries = await d.summarizeBatch(batch, config, d.fetch);
+      for (const article of batch) {
+        const summary = summaries.get(article.id);
+        if (!summary) throw new Error("Missing article summary");
+        article.summary = summary;
+        completed.push(article);
+      }
     } catch (error) {
       if (
         error instanceof Error && error.message === "LLM authentication failed"
       ) throw error;
-      errors.push({ source: article.title, message: safeMessage(error) });
-      console.error(`Article failed: ${article.title}`);
+      for (const article of batch) {
+        errors.push({ source: article.title, message: safeMessage(error) });
+        console.error(`Article failed: ${article.title}`);
+      }
     }
   }
 
@@ -121,7 +140,7 @@ export async function opmlToMarkdown(
 
 type Dependencies = {
   fetch: typeof fetch;
-  summarize: typeof summarize;
+  summarizeBatch: typeof summarizeBatch;
   now: () => Date;
 };
 

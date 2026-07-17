@@ -22,11 +22,13 @@ inputs:
     required: true
   llm-api-base-url:
     description: Base URL for the OpenAI-compatible LLM API.
-    default: https://api.x.ai/v1
-    required: false
+    required: true
   llm-model:
     description: Model name for the OpenAI-compatible LLM API.
-    default: grok-3-mini
+    required: true
+  llm-batch-size:
+    description: Number of articles summarized in each LLM request.
+    default: 5
     required: false
 
 outputs:

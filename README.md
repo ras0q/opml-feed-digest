@@ -11,7 +11,8 @@ repository.
 1. Create a private repository and add `feeds.opml`. The public Action checks
    out and reads this private repository; it does not receive your OPML file in
    the public repository.
-2. Add `LLM_API_KEY` as a repository secret.
+2. Add `LLM_API_KEY` as a repository secret, and choose an OpenAI-compatible API
+   base URL and model that support structured outputs.
 3. Create `.github/workflows/feed-digest.yml` with the following workflow. Pin
    `ras0q/opml-feed-digest` to a release tag or commit SHA before enabling
    scheduled runs.
@@ -44,9 +45,9 @@ jobs:
           state-path: .state/processed.json
           output-path: digest.md
           llm-api-key: ${{ secrets.LLM_API_KEY }}
-          # Optional OpenAI-compatible provider settings.
-          llm-api-base-url: https://api.x.ai/v1
-          llm-model: grok-3-mini
+          llm-api-base-url: ${{ vars.LLM_API_BASE_URL }}
+          llm-model: ${{ vars.LLM_MODEL }}
+          llm-batch-size: 5
       - name: Append digest comment
         if: steps.digest.outputs.has-new-articles == 'true'
         env:
@@ -64,6 +65,10 @@ the updated state only when the entire private workflow succeeds, so a failed
 Issue comment is retried on the next run. The private workflow owns the
 `GITHUB_TOKEN`; the public Action does not call the GitHub API or access Issue
 history.
+
+Each LLM request summarizes up to five articles by default. The selected model
+must support Chat Completions structured outputs via
+`response_format.type: json_schema`.
 
 ## Private feed endpoints
 

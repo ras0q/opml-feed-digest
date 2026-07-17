@@ -25,8 +25,9 @@ deno task build:action
 `deno task build:action` regenerates the committed ESM Action bundles in
 `dist/`. Run it whenever changing the Action or digest source.
 
-To generate a digest locally, set `LLM_API_KEY` and `LLM_API_BASE_URL`, then
-run:
+To generate a digest locally, set `LLM_API_KEY`, `LLM_API_BASE_URL`, and
+`LLM_MODEL`. Set `LLM_BATCH_SIZE` to override the default of five articles per
+request, then run:
 
 ```sh
 deno task digest
