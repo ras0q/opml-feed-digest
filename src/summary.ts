@@ -85,12 +85,12 @@ export async function summarizeBatch(
         response.status !== 429
       ) {
         throw new LlmRequestError(
-          `LLM returned HTTP ${response.status}: ${response.statusText}`,
+          `LLM returned HTTP ${response.status}: ${await response.text()}`,
         );
       }
       if (!response.ok) {
         throw new Error(
-          `LLM returned HTTP ${response.status}: ${response.statusText}`,
+          `LLM returned HTTP ${response.status}: ${await response.text()}`,
         );
       }
 
