@@ -143,12 +143,14 @@ Deno.test("LLM summaries require the decision schema", () => {
 Deno.test("LLM batches use a strict response schema", async () => {
   let request: Record<string, unknown> | undefined;
   let requests = 0;
+  const config = testConfig(".");
+  config.language = "English";
   const summaries = await summarizeBatch(
     [
       { id: "one", title: "One", content: "first article" },
       { id: "two", title: "Two", content: "second article" },
     ],
-    testConfig("."),
+    config,
     (_input, init) => {
       requests++;
       request = JSON.parse(String(init?.body));
@@ -215,6 +217,17 @@ Deno.test("LLM batches use a strict response schema", async () => {
     ["one", "two"],
   );
   assertEquals(request.max_tokens, 200);
+  const messages = request.messages as { content: string }[];
+  assertEquals(
+    messages[0].content.includes(
+      'Write every natural-language field in "English".',
+    ),
+    true,
+  );
+  assertEquals(
+    messages.every((message) => !/[ぁ-んァ-ヶ一-龠]/.test(message.content)),
+    true,
+  );
 });
 
 Deno.test("Markdown prioritizes categories and emits a compact digest", () => {
@@ -467,6 +480,7 @@ function testConfig(directory: string): Config {
     llmApiBaseUrl: "https://llm.test",
     llmApiKey: "secret",
     llmModel: "test",
+    language: "Japanese",
     stateRetentionDays: 90,
     stateMaxEntries: 5_000,
   };

@@ -14,6 +14,7 @@ export type Config = {
   llmApiBaseUrl: string;
   llmApiKey: string;
   llmModel: string;
+  language: string;
   stateRetentionDays: number;
   stateMaxEntries: number;
 };
@@ -37,6 +38,12 @@ const required = (name: string) => {
 };
 
 const optional = (name: string) => process.env[name] ?? "";
+
+const text = (name: string, fallback: string) => {
+  const value = process.env[name]?.trim() ?? fallback;
+  if (!value) throw new Error(`${name} must not be empty`);
+  return value;
+};
 
 /**
  * Loads runtime configuration from environment variables.
@@ -64,6 +71,7 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
       : optional("LLM_API_BASE_URL"),
     llmApiKey: llm ? required("LLM_API_KEY") : optional("LLM_API_KEY"),
     llmModel: llm ? required("LLM_MODEL") : optional("LLM_MODEL"),
+    language: text("LANGUAGE", "Japanese"),
     stateRetentionDays: number("STATE_RETENTION_DAYS", 90),
     stateMaxEntries: number("STATE_MAX_ENTRIES", 5_000),
   };

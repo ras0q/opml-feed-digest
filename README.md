@@ -48,6 +48,7 @@ jobs:
           llm-api-base-url: ${{ vars.LLM_API_BASE_URL }}
           llm-model: ${{ vars.LLM_MODEL }}
           llm-batch-size: 5
+          language: Japanese
       - name: Append digest comment
         if: steps.digest.outputs.has-new-articles == 'true'
         env:
@@ -68,7 +69,8 @@ history.
 
 Each LLM request summarizes up to five articles by default. The selected model
 must support Chat Completions structured outputs via
-`response_format.type: json_schema`.
+`response_format.type: json_schema`. Set `language` to choose the
+generated-summary language; it defaults to `Japanese`.
 
 ## Private feed endpoints
 

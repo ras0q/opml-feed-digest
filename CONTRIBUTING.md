@@ -31,10 +31,12 @@ deno task build:action
 
 To generate a digest locally, set `LLM_API_KEY`, `LLM_API_BASE_URL`, and
 `LLM_MODEL`. Set `LLM_BATCH_SIZE` to override the default of five articles per
-request. Set `MAX_ARTICLES` or `MAX_ARTICLES_PER_FEED` to override the defaults
-of 20 articles overall and 3 per feed. `MAX_ARTICLE_AGE_DAYS` defaults to 3;
-older and undated feed items are skipped. `MIN_FEED_CONTENT_CHARS` defaults to
-1,000; shorter feed excerpts are replaced by the article page body. Then run:
+request. Set `LANGUAGE` to choose the generated-summary language; it defaults to
+`Japanese`. Set `MAX_ARTICLES` or `MAX_ARTICLES_PER_FEED` to override the
+defaults of 20 articles overall and 3 per feed. `MAX_ARTICLE_AGE_DAYS` defaults
+to 3; older and undated feed items are skipped. `MIN_FEED_CONTENT_CHARS`
+defaults to 1,000; shorter feed excerpts are replaced by the article page body.
+Then run:
 
 ```sh
 deno task digest

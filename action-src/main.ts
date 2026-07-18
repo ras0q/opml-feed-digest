@@ -47,6 +47,7 @@ try {
   });
   process.env.LLM_MODEL = core.getInput("llm-model", { required: true });
   process.env.LLM_BATCH_SIZE = core.getInput("llm-batch-size");
+  process.env.LANGUAGE = core.getInput("language");
   process.env.OPML_PATH = opmlPath;
   process.env.STATE_PATH = statePath;
 

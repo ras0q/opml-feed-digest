@@ -30,6 +30,10 @@ inputs:
     description: Number of articles summarized in each LLM request.
     default: 5
     required: false
+  language:
+    description: Language for generated summaries.
+    default: Japanese
+    required: false
 
 outputs:
   has-new-articles:
