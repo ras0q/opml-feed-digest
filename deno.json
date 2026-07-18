@@ -1,11 +1,11 @@
 {
   "imports": {
-    "@actions/cache": "npm:@actions/cache@4.0.3",
-    "@actions/core": "npm:@actions/core@1.11.1",
-    "@std/assert": "jsr:@std/assert@1",
+    "@actions/cache": "npm:@actions/cache@6.2.0",
+    "@actions/core": "npm:@actions/core@3.0.1",
+    "@std/assert": "jsr:@std/assert@^1.0.19",
     "@mozilla/readability": "npm:@mozilla/readability@0.6.0",
     "arktype": "npm:arktype@^2.2.3",
-    "fast-xml-parser": "npm:fast-xml-parser@5.10.0",
+    "fast-xml-parser": "npm:fast-xml-parser@5.10.1",
     "linkedom": "npm:linkedom@0.18.13"
   },
   "tasks": {
