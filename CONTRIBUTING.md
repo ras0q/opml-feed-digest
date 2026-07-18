@@ -27,6 +27,14 @@ deno task build:action
 `deno task build:action` regenerates the committed ESM Action bundles in
 `dist/`. Run it whenever changing the Action or digest source.
 
+### Testing policy
+
+Write tests only for the current behavior. Remove tests that solely preserve
+deleted behavior. Prefer Deno snapshots for stable, reviewable outputs with
+multiple fields, such as LLM requests; use explicit assertions when they state
+the intent more clearly. Update snapshots with `deno test -u`, inspect the
+snapshot diff, and commit it with the behavior change.
+
 ### Generate a digest
 
 To generate a digest locally, set `LLM_API_KEY`, `LLM_API_BASE_URL`, and

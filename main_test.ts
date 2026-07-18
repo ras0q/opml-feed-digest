@@ -140,19 +140,15 @@ Deno.test("LLM summaries require the decision schema", () => {
   );
 });
 
-Deno.test("LLM batches use a strict response schema", async () => {
+Deno.test("LLM batch request matches the current specification", async (t) => {
   let request: Record<string, unknown> | undefined;
-  let requests = 0;
-  const config = testConfig(".");
-  config.language = "English";
   const summaries = await summarizeBatch(
     [
       { id: "one", title: "One", content: "first article" },
       { id: "two", title: "Two", content: "second article" },
     ],
-    config,
+    testConfig("."),
     (_input, init) => {
-      requests++;
       request = JSON.parse(String(init?.body));
       return Promise.resolve(
         new Response(JSON.stringify({
@@ -186,48 +182,8 @@ Deno.test("LLM batches use a strict response schema", async () => {
   );
 
   assertEquals(summaries.size, 2);
-  assertEquals(requests, 1);
   if (!request) throw new Error("Expected an LLM request");
-  const responseFormat = request.response_format as {
-    json_schema: {
-      strict: boolean;
-      schema: {
-        additionalProperties: boolean;
-        properties: {
-          summaries: {
-            items: {
-              additionalProperties: boolean;
-              properties: { id: { enum: string[] } };
-            };
-          };
-        };
-      };
-    };
-  };
-  assertEquals(responseFormat.json_schema.strict, true);
-  assertEquals(responseFormat.json_schema.schema.additionalProperties, false);
-  assertEquals(
-    responseFormat.json_schema.schema.properties.summaries.items
-      .additionalProperties,
-    false,
-  );
-  assertEquals(
-    responseFormat.json_schema.schema.properties.summaries.items.properties.id
-      .enum,
-    ["one", "two"],
-  );
-  assertEquals(request.max_tokens, 200);
-  const messages = request.messages as { content: string }[];
-  assertEquals(
-    messages[0].content.includes(
-      'Write every natural-language field in "English".',
-    ),
-    true,
-  );
-  assertEquals(
-    messages.every((message) => !/[ぁ-んァ-ヶ一-龠]/.test(message.content)),
-    true,
-  );
+  await t.assertSnapshot(request);
 });
 
 Deno.test("Markdown prioritizes categories and emits a compact digest", () => {
